@@ -14,6 +14,8 @@ The Server is responsible for encapsulating Modbus RTU frames for communication 
 # Import the required Client libraries
 #----------------------------------------------------------------------------#
 
+from threading import Timer
+
 import pymodbus
 import time
 import logging
@@ -23,11 +25,13 @@ import logging
 #----------------------------------------------------------------------------#
 
 from pymodbus.client.sync import ModbusSerialClient as ModbusClient
+from pymodbus.datastore import ModbusSlaveContext, ModbusServerContext
 
 # --------------------------------------------------------------------------- #
 # Importing the required Server libraries
 # --------------------------------------------------------------------------- #
 
+from pymodbus.transaction import ModbusRtuFramer, ModbusBinaryFramer
 from pymodbus.server.sync import StartTcpServer as StartServer
 from pymodbus.device import ModbusDeviceIdentification
 from pymodbus.datastore.remote import RemoteSlaveContext
@@ -46,34 +50,33 @@ log.setLevel(logging.DEBUG)
 # Defining a few constants...
 #----------------------------------------------------------------------------#
 
-PORT = 'COM3'
-BAUDRATE = 19200
-UNIT = 0x14
+#PORT = 'COM3'
+#BAUDRATE = 9600
+#UNIT = 0x14
 
 #----------------------------------------------------------------------------#
 # Implementing Client
 #----------------------------------------------------------------------------#
 
-client = ModbusClient(method='rtu', port=PORT, bytesize=8, stopbits=1, timeout=2, parity='E', baudrate=BAUDRATE)
+client = ModbusClient(method='rtu', port='COM3', parity='E', baudrate=9600, bytesize=8, stopbits=1, timeout=1)
 
 #----------------------------------------------------------------------------#
 # Data store
 #----------------------------------------------------------------------------#
 
-store = RemoteSlaveContext(client, unit=UNIT)
+store = RemoteSlaveContext(client, unit=0x14)
 
 context = ModbusServerContext(slaves=store, single=True)
-identity = ModbusDeviceIdentification()
-identity.VendorName = 'KVM-Genvex A/S'
-identity.ProductCode = '297986329025'
-identity.VendorUrl = 'https://www.genvex.com/en'
-identity.ProductName = 'OPT270'
-identity.ModelName = 'TCP Server'
-    
+#identity = ModbusDeviceIdentification()
+#identity.VendorName = 'KVM-Genvex A/S'
+#identity.ProductCode = '297986329025'
+#identity.VendorUrl = 'https://www.genvex.com/en'
+#identity.ProductName = 'OPT270'
+#identity.ModelName = 'TCP Server'
+
 # ----------------------------------------------------------------------- #
 # Running the server
 # ----------------------------------------------------------------------- #
-StartServer(context, identity=identity, address=("localhost", 502), framer = ModbusRtuFramer)
-      
+StartServer(context,address=("localhost", 502),framer = ModbusRtuFramer)
 
 

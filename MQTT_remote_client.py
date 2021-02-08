@@ -16,8 +16,8 @@ import json
 #reg_config = {"telemetry_id":reg_value}
 #A nested register can be used to store these registers and their names used as keys.
 #--------------------------------------------------------------------------------------------------#
-holding_write_reg = {"Room_Temperature":'12', "Humidity_Control":'22', "Fan_Speed_level":'24', "Fan_mode":'112'}
-holding_read_reg  = {"Room_Temperature":'01', "Humidity_Control":'06', "Fan_Speed_level":'07', "Fan_mode":'51'}
+holding_write_reg = {"Room_Temp":'1', "Humidity_Cntrl":'22', "Fan_Spd_level":'24', "Fan_mode":'112'}
+holding_read_reg  = {"Room_Temp":'1', "Humidity_Control":'06', "Fan_Speed_level":'07', "Fan_mode":'51'}
 
 input_reg = {'Supply_air':'20', 'Fresh_air':'21','Discharge_air':'22','Extract_air':'23', 'Humidity_Sensor':'26'}
 #--------------------------------------------------------------------------------------------------#
@@ -30,18 +30,19 @@ read_req_value = 0  #to store response of read_req.
 
 #method to display a message once the user(client1) has connected to MQTT server. Called when connection is successful.
 def on_connect(client, userdata, flags, rc):
-     print("Connected flags"+str(flags)+"result code "\
-     +str(rc)+"client1_id ")
-     client.connected_flag=True
-    
+     #print("Connected flags"+str(flags)+"result code "\
+     #+str(rc)+"client1_id")
+     #client.connected_flag=True
+    pass
 #method to display a message when the data has been published by user client (client1). Called when publish is successful.
 def on_publish(client, userdata, mid):
     print("Data published.")
 
 #Callback function to print the data received from the register after sending a read request.(The callback for when a PUBLISH message is received from the server)
 def data_req_on_message(client,userdata,message):
+    global read_req_value
     print("Data received :\n")
-    read_req_value = int(message.payload)     #data.get('value') In case that the data is not retrievable
+    read_req_value = message.payload     #data.get('value') In case that the data is not retrievable
     print("Register value :\n")
     print(read_req_value)
     
@@ -53,11 +54,12 @@ broker_address="test.mosquitto.org" #Using online broker
 # Client2 is both an MQTT client and MODBUS client. It sends the received request to the MODBUS server to create/write data from the slaves. 
 #--------------------------------------------------------------------------------------------------------------------------------------------------------#
 print("creating new instance")
-client1 = mqtt.Client("P1")
+client1 = mqtt.Client("P1", clean_session= True)
+client1.on_connect = on_connect
 client1.on_publish = on_publish
 client1.on_message = data_req_on_message
 print("connecting to broker")
-client1.connect(broker_address,8883) #connect to encrypted MQTT broker
+client1.connect(broker_address,1883) #connect to encrypted MQTT broker
 client1.loop_start()            #start the loop
 
 print("Pushing reg_configs")
@@ -69,7 +71,7 @@ client1.publish('slave_config',json.dumps(slave_config),qos=2)  #Pushing initial
 time.sleep(2)                                                   #delay to wait till slave_config is pushed before prompting for data input
 
 print("Subscribing to data request")
-client1.subscribe('data_req',qos=0)  #Subscribing to data request topic where the requested data from register is published by client2. 
+client1.subscribe('data_req',qos=2)  #Subscribing to data request topic where the requested data from register is published by client2. 
 time.sleep(2)
 
 #--------------------------------------------------------------------------------------------#
@@ -151,8 +153,8 @@ while cont == 'Y':
         print("Writing to register\n",value)
         print("Publishing value to device\n",device)
         
-        client1.publish('device_in_use',device,qos = 0) #publish the device currently in use. the register number of that device is taken from reg_config and value is written.
-        client1.publish('data', payload=json.dumps({'reg_type':reg_type, 'telemetry_id':telemetry_id ,'value':value}),qos = 0) #publish value to be put in register
+        client1.publish('device_in_use',device,qos = 2) #publish the device currently in use. the register number of that device is taken from reg_config and value is written.
+        client1.publish('data', payload=json.dumps({'reg_type':reg_type, 'telemetry_id':telemetry_id ,'value':value}),qos = 2) #publish value to be put in register
         time.sleep(2)
     
     elif choice == '2':
@@ -167,10 +169,10 @@ while cont == 'Y':
             print("Choose telemetry id to read from", holding_read_reg)
         elif reg_type == 'input_reg':
             print("Choose telemetry_id to read from", input_reg)
-        telemetry_id = input("Enter telemetry_id to write to:\n")
+        telemetry_id = input("Enter telemetry_id to read:\n")
         
-        client1.publish('device_in_use',device,qos = 0)
-        client1.publish('read_req',payload=json.dumps({'reg_type':reg_type,'telemetry_id':telemetry_id}),qos=1)
+        client1.publish('device_in_use',device,qos = 2)
+        client1.publish('read_req',payload=json.dumps({'reg_type':reg_type,'telemetry_id':telemetry_id}),qos=2)
         time.sleep(5)
     else:
         print("Invalid choice")

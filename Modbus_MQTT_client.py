@@ -62,10 +62,16 @@ input_reg = {}
 #reg_config = {"Room Temperature":'12',"Humidity control":'22'}
 slave_config = {}
 #slave_id = {"HVAC_Unit":'0x14'}
-device = 'OPT270'
+device = ''
 
 functional_code = 0     
-register = 0
+read_reg = 0
+write_reg = 0
+value = 0
+
+def on_connect(client, userdata, flags, rc):
+    print("Connected to broker")
+    
 def on_disconnect(client, userdata,flags,rc=0):
     print("Disconnected with result code"+str(rc))
 #--------------------------------------------------------------------------------------------------------------------#
@@ -86,6 +92,7 @@ def device_on_message(client, userdata, message):
 def data_on_message(client, userdata, msg):
     global device
     global functional_code
+    global write_reg
     dev = device.decode("utf-8")  #to convert from binary array to string
     
     data = json.loads(msg.payload)
@@ -99,25 +106,24 @@ def data_on_message(client, userdata, msg):
     
     telemetry_id = data.get("telemetry_id")
     telemetry_id = str(telemetry_id)
-    reg = int(holding_write_reg[locals()['telemetry_id']])
+    write_reg = int(holding_write_reg[locals()['telemetry_id']])
     print("Register to write into :\n")
-    print(reg)
+    print(write_reg)
     
-    value = data.get("value")
-    value=int(value)                  #value = int(message.payload)
-    print("Value:", value)
+    val = data.get("value")
+    val=int(val)                  #value = int(message.payload)
+    print("Value:", val)
     
     UNIT = int(slave_config[locals()['dev']])
     print("Slave unit to write into :\n")
     print(UNIT)
     
-    mclient = ModbusClient(host = "localhost", port = 502, framer = ModbusRtuFramer) #Initialise the ModbusTcpClient
+    mclient = ModbusClient(host = "localhost", port = 502,framer = ModbusRtuFramer) #Initialise the ModbusTcpClient
     mclient.connect()
     if functional_code == 3:
         print("Cannot write to an input register")
     elif functional_code == 4:
-        rw = mclient.write_register(reg,value,unit=UNIT)
-    mclient.close()
+        rw = mclient.write_register(write_reg,value=val,unit=UNIT)
 
 #--------------------------------------------------------------------------------------------------------------------#
 #This function is called when data a data read request is sent from the remote mqtt_client(broker). It proceeds as follows:
@@ -125,15 +131,17 @@ def data_on_message(client, userdata, msg):
 #>Then it establishes a Modbus TCP connection with the Optima and reads the value of the target register. this value is then published to 
 #>data_req topic to which the remote client is subscribed.
 #--------------------------------------------------------------------------------------------------------------------#
-def data_req_on_publish(client, userdata, mid):  #confirmation that collected data has been published
+#confirmation that collected data has been published
+def data_req_on_publish(client, userdata, mid):  
     print("Data request published\n")
 
 def req_response_on_connect(client, userdata, flags, rc):
     print("Connection established.")
 
-def read_req_on_message(client,userdata,message):
+def read_req_on_message(client,userdata,msg):
     global functional_code
-    global register
+    global read_reg
+    global value
     print("Data read request received")
     global device
     dev = device.decode("utf-8")
@@ -144,34 +152,44 @@ def read_req_on_message(client,userdata,message):
     reg_type =str(reg_type)
     if reg_type == 'holding_reg':
         functional_code = 4
+        print("Funtional code is: ",functional_code)
     elif reg_type =='input_reg':
         functional_code = 3
+        print("Funtional code is: ",functional_code)
     
     telemetry_id = data.get("telemetry_id")
     telemetry_id = str(telemetry_id)
     if reg_type =='holding_reg':
-        reg = int(holding_read_reg[locals()['telemetry_id']])
+        read_reg = int(holding_read_reg[locals()['telemetry_id']])
     elif reg_type == 'input_reg':
-        reg = int(input_reg[locals()['telemetry_id']])
+        read_reg = int(input_reg[locals()['telemetry_id']])
     
-    
+    print("Reg_value :",read_reg)
     UNIT = int(slave_config[locals()['dev']])
     mclient = ModbusClient(host = "localhost", port = 502, framer = ModbusRtuFramer) #Initialise the ModbusTcpClient
     mclient.connect()
     
-    value = int(0)
     if functional_code == 4:
-        rr = mclient.read_holding_registers(register,1,unit=UNIT)
+        rr = mclient.read_holding_registers(read_reg,1,unit=UNIT)
+        if rr.isError():
+            print('Modbus Error:', rr)
+        else:
+            value = rr.registers[0]
+        client.publish('data_req',value,qos=2)
+    
     elif functional_code == 3:
-        rr = client.read_input_register(register,1,unit=UNIT)
-        value = rr.registers
+        rr = mclient.read_input_register(read_reg,1,unit=UNIT)
+        if rr.isError():
+            print('Modbus Error:', rr)
+        else:
+            value = rr.registers[0]
+        client.publish('data_req',value,qos=2) #published to data_req to which user client is subscribed.
     print(value)
-    client.publish('data_req',value[0],qos=2) #published to data_req to which user client is subscribed. 
-
 #--------------------------------------------------------------------------------------------------------------------#
 #This function updates the reg_config and slave_config global variable when the respective variables are updated by the remote mtt client
 # so that the data_on_message and read_req_on_message get values from the correct registers and slave unit(s) respectively.
 #--------------------------------------------------------------------------------------------------------------------#
+
 def reg_config_on_message(client, userdata, message):
     print("reg_config received\n")
     global holding_read_reg
@@ -213,7 +231,7 @@ print("creating reg_config instance")
 client_reg = mqtt.Client("REG")
 client_reg.on_message = reg_config_on_message
 print("connecting to broker")
-client_reg.connect(broker_address,8883)
+client_reg.connect(broker_address,1883)
 client_reg.loop_start()
 print("Subscribing to reg_config")
 client_reg.subscribe('reg_config',qos=2)
@@ -227,7 +245,7 @@ print("creating slave_config instance")
 client_slave = mqtt.Client("SLAVE")
 client_slave.on_message = slave_config_on_message
 print("connecting to broker")
-client_slave.connect(broker_address)
+client_slave.connect(broker_address,1883)
 client_slave.loop_start()
 print("Subscribing to slave_config")
 client_slave.subscribe('slave_config',qos=2)
@@ -241,7 +259,7 @@ print("Creating device_in_use instance")
 client_dev = mqtt.Client("DIU")
 client_dev.on_message = device_on_message
 print("connecting to broker")
-client_dev.connect(broker_address)
+client_dev.connect(broker_address,1883)
 client_dev.loop_start()
 print("Subscribing to device_in_use")
 client_dev.subscribe('device_in_use',qos=2)
@@ -255,7 +273,7 @@ print("Creating data instance")
 client_data = mqtt.Client("DATA")
 client_data.on_message = data_on_message
 print("connecting to broker")
-client_data.connect(broker_address)
+client_data.connect(broker_address,1883)
 client_data.loop_start()
 print("Subscribing to data")
 client_data.subscribe('data',qos=2)
@@ -270,7 +288,7 @@ client_data_req = mqtt.Client("DATA_REQ")
 client_data_req.on_message = read_req_on_message
 client_data_req.on_publish = data_req_on_publish
 print("connecting to broker")
-client_data_req.connect(broker_address)
+client_data_req.connect(broker_address,1883)
 client_data_req.loop_start()
 print("Subscribing to read req")
 client_data_req.subscribe('read_req',qos=2)
