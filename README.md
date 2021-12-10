@@ -1,2 +1,1 @@
-# Masters-Thesis
-IoT Solution for HVAC Systems
+# MQTT Demo for IoT connectivity
