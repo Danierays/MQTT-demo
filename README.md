@@ -12,7 +12,10 @@
     |-- slave 0
     |-- slave 1
 ```
-### Design/Architecture
+### Architecture
+![image](https://user-images.githubusercontent.com/65251073/146212062-1947e446-d18c-4966-a899-11bb1a7991c7.png)
+
+### System Sequence
 ![image](https://user-images.githubusercontent.com/65251073/146211739-2736095b-b8fe-46de-8ffa-25f1f2bbd827.png)
 
 ## MQTT topic structure
