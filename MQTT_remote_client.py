@@ -1,6 +1,8 @@
 """
-Python Implementation of a remote MQTT client. 
+@brief: Python Implementation of a remote MQTT client. 
+@author: Daniel Isaac K. Njamen
 
+@date: <02/03/2021>
 -------------------------------------------------------------------------------------------
 reg_configs as well as the slave_configs are defines here. Meaning that the remote user sends read/write
 requests to the MQTT broker with information such as the device_ID and the target register(s).
